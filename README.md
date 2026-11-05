@@ -62,7 +62,24 @@ A time series is broken into disjoint fixed-length sub-sequences called patches,
 
 ## 🧑‍💻 Usage
 
-**Recommended Python Version:** Python 3.11 (support for additional versions is expected soon).
+**Recommended Python Version:** Python 3.11 (this research environment supports 3.11–3.12).
+
+For local development, use uv and the committed lockfile:
+
+```bash
+# Apple Silicon Mac: core inference
+uv sync --locked
+
+# Linux x86_64: choose CPU inference or CUDA 12.8 fine-tuning
+uv sync --locked --extra cpu
+uv sync --locked --extra cu128 --extra finetune
+
+# Report the installed environment; does not train or download model weights
+uv run --no-sync python scripts/check_environment.py
+```
+
+Choose the install command for your platform. See [依赖与跨平台运行说明](./DEPENDENCIES.md)
+for optional data/Notebook/DeepSpeed dependencies, offline checks, and Mac CPU/MPS inference.
 
 You can install the `momentfm` package using pip:
 ```bash

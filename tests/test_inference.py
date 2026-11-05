@@ -4,6 +4,10 @@ Model structures are based on those given in the tutorials folder.
 A test is considered successful if a TimeSeriesOutput is generated for each model inference pass, without an error.
 '''
 
+import pytest
+
+pytestmark = pytest.mark.pretrained
+
 from momentfm import MOMENTPipeline # This imports the MOMENT model
 import torch
 from pprint import pprint
