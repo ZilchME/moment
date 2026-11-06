@@ -192,6 +192,68 @@ def evaluate_predictions(raw, rows, prediction, train_mean):
     }
 
 
+def plotting():
+    # Use a noninteractive backend on training servers without a display.
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    return plt
+
+
+def save_learning_curve(directory, history, best_epoch):
+    plt = plotting()
+    fig, ax = plt.subplots(figsize=(9, 4), layout="constrained")
+    epochs = [item["epoch"] for item in history]
+    ax.plot(epochs, [item["train_mse_standardized"] for item in history], label="Train")
+    ax.plot(epochs, [item["validation_mse_standardized"] for item in history], label="Validation")
+    ax.axvline(best_epoch, color="gray", linestyle="--", label=f"Best epoch: {best_epoch}")
+    ax.set(xlabel="Epoch", ylabel="Standardized MSE", title="Training and validation loss")
+    ax.legend()
+    fig.savefig(Path(directory) / "learning_curve.png", dpi=180)
+    plt.close(fig)
+
+
+def save_evaluation_plots(directory, raw, rows, prediction, train_mean):
+    plt = plotting()
+    truth = raw[rows, 7]
+    scores = regression_metrics(truth, prediction)
+    residual = prediction - truth
+    directory = Path(directory)
+
+    fig, ax = plt.subplots(figsize=(12, 4), layout="constrained")
+    ax.plot(rows, truth, label="Measured", linewidth=1.2)
+    ax.plot(rows, prediction, label="MOMENT", linewidth=1.0, alpha=0.85)
+    ax.axhline(train_mean, color="gray", linestyle="--", label="Training mean")
+    ax.set(xlabel="Sample index (0-based)", ylabel="y (CSV scale)",
+           title=f"Held-out test predictions | RMSE={scores['rmse']:.4g}, MAE={scores['mae']:.4g}")
+    ax.legend()
+    fig.savefig(directory / "prediction_comparison.png", dpi=180)
+    plt.close(fig)
+
+    fig, ax = plt.subplots(figsize=(5, 5), layout="constrained")
+    ax.scatter(truth, prediction, s=10, alpha=0.5)
+    low, high = float(min(truth.min(), prediction.min())), float(max(truth.max(), prediction.max()))
+    padding = max((high - low) * 0.05, 1e-6)
+    limits = (low - padding, high + padding)
+    ax.plot(limits, limits, "--", color="gray", label="Ideal")
+    r2 = f"{scores['r2']:.4g}" if scores["r2"] is not None else "undefined (constant target)"
+    ax.set(xlabel="Measured y (CSV scale)", ylabel="Predicted y (CSV scale)",
+           xlim=limits, ylim=limits, title=f"Measured vs predicted | R²={r2}")
+    ax.set_aspect("equal", adjustable="box")
+    ax.legend()
+    fig.savefig(directory / "prediction_scatter.png", dpi=180)
+    plt.close(fig)
+
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4), layout="constrained")
+    axes[0].plot(rows, residual, linewidth=1)
+    axes[0].axhline(0, color="gray", linestyle="--")
+    axes[0].set(xlabel="Sample index (0-based)", ylabel="Prediction - measured", title="Test residuals")
+    axes[1].hist(residual, bins=min(40, max(1, int(np.sqrt(len(rows))))), color="steelblue")
+    axes[1].set(xlabel="Prediction - measured (CSV scale)", ylabel="Count", title="Residual distribution")
+    fig.savefig(directory / "residuals.png", dpi=180)
+    plt.close(fig)
+
+
 def prepare_output(directory):
     directory = Path(directory)
     if directory.exists() and any(directory.iterdir()):
@@ -200,6 +262,7 @@ def prepare_output(directory):
 
 
 def train(args):
+    plotting()  # Fail before training if plotting dependencies are missing.
     raw = load_debutanizer(args.data)
     splits = chronological_rows(len(raw), args.first_row, args.train_size, args.val_size)
     features, names = make_features(raw, args.features)
@@ -275,6 +338,29 @@ def train(args):
     }
     json_write(args.output / "metrics.json", report)
     write_predictions(args.output / "predictions.csv", raw, rows, prediction, train_mean)
+    save_learning_curve(args.output, history, best_epoch)
+    # Reload a standalone checkpoint and repeat inference on exactly the held-out rows.
+    # Release the training model/optimizer before allocating another backbone on the GPU.
+    del optimizer, groups, model
+    if device.type == "cuda":
+        torch.cuda.empty_cache()
+    validation_output = args.output / "inference_validation"
+    print("Reloading best.pt for held-out inference validation...", flush=True)
+    reloaded_rows, reloaded_prediction = infer(argparse.Namespace(
+        command="evaluate", checkpoint=checkpoint_path, data=args.data,
+        output=validation_output, device=args.device,
+        batch_size=args.batch_size, workers=args.workers,
+    ))
+    matched = bool(np.array_equal(rows, reloaded_rows) and
+                   np.allclose(prediction, reloaded_prediction, rtol=1e-5, atol=1e-6))
+    json_write(validation_output / "consistency.json", {
+        "checkpoint_reloaded": True, "matches_training_evaluation": matched,
+        "n_predictions": len(reloaded_rows), "rtol": 1e-5, "atol": 1e-6,
+        "max_absolute_prediction_difference": float(np.max(np.abs(prediction - reloaded_prediction)))
+        if np.array_equal(rows, reloaded_rows) else None,
+    })
+    if not matched:
+        raise RuntimeError("Reloaded checkpoint inference differs from training evaluation; see consistency.json.")
     print(json.dumps(scores, indent=2), flush=True)
     print(f"Saved checkpoint and test results to {args.output.resolve()}")
 
@@ -320,7 +406,10 @@ def infer(args):
     if args.command == "evaluate":
         report["metrics"] = evaluate_predictions(raw, indices, prediction, train_mean)
     json_write(args.output / "metrics.json", report)
+    if args.command == "evaluate":
+        save_evaluation_plots(args.output, raw, indices, prediction, train_mean)
     print(json.dumps(report, indent=2), flush=True)
+    return indices, prediction
 
 
 def main():

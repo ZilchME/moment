@@ -64,7 +64,7 @@ A time series is broken into disjoint fixed-length sub-sequences called patches,
 
 For the debutanizer soft-sensing baseline (7 process inputs or 13 causal features,
 chronological evaluation, frozen probing/full fine-tuning), see [脱丁烷塔适配说明](./DEBUTANIZER.md).
-The adaptation has been written but has not yet been executed or validated.
+The adaptation has passed a tiny offline CPU workflow check; pretrained-model training is not yet validated.
 
 **Recommended Python Version:** Python 3.11 (this research environment supports 3.11–3.12).
 

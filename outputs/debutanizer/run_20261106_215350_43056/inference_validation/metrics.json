@@ -1,0 +1,34 @@
+{
+  "command": "evaluate",
+  "n_predictions": 1390,
+  "skipped_rows": 0,
+  "checkpoint": "/home/zilch/SoftSensor/moment/outputs/debutanizer/run_20261106_215350_43056/best.pt",
+  "data_sha256": "5e0d8beeceaa6e11e4f33e155ded558900e6a8874d478851845ebb62de913906",
+  "independent_test": true,
+  "metrics": {
+    "moment": {
+      "n": 1390,
+      "mse": 0.03283333086420607,
+      "rmse": 0.1811996988524155,
+      "mae": 0.14040683255087053,
+      "r2": 0.11814448024616153,
+      "rmse_paper_n_minus_1": 0.18126491379023058
+    },
+    "train_mean": {
+      "n": 1390,
+      "mse": 0.03793364920220573,
+      "rmse": 0.19476562633638855,
+      "mae": 0.1393832933243957,
+      "r2": -0.018842653269738552,
+      "rmse_paper_n_minus_1": 0.19483572373881516
+    },
+    "persistence_requires_measured_past_y": {
+      "n": 1390,
+      "mse": 0.0002462654900945011,
+      "rmse": 0.01569284837416398,
+      "mae": 0.010749976684316546,
+      "r2": 0.9933856670630553,
+      "rmse_paper_n_minus_1": 0.01569849633129274
+    }
+  }
+}

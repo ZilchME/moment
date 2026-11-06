@@ -1,0 +1,78 @@
+{
+  "data_sha256": "5e0d8beeceaa6e11e4f33e155ded558900e6a8874d478851845ebb62de913906",
+  "raw_samples": 2394,
+  "target": "y",
+  "feature_mode": "process",
+  "feature_names": [
+    "u1",
+    "u2",
+    "u3",
+    "u4",
+    "u5",
+    "u6",
+    "u7"
+  ],
+  "model": "AutonLab/MOMENT-1-small",
+  "revision": null,
+  "seed": 42,
+  "context_length": 32,
+  "window_stats": true,
+  "mode": "probe",
+  "best_epoch": 2,
+  "best_validation_mse_standardized": 0.8211943012475967,
+  "trainable_parameters": 3606,
+  "total_parameters": 35341014,
+  "evaluation": "same-time soft sensing: inputs through t predict y(t); no recursive target feedback",
+  "target_scale": "CSV y values; physical units/upstream normalization parameters are unavailable",
+  "historical_y_inputs": false,
+  "persistence_comparison": "persistence uses measured y(t-1), including when MOMENT uses process inputs only",
+  "split": {
+    "train": {
+      "n": 800,
+      "raw_index_range_inclusive": [
+        4,
+        803
+      ]
+    },
+    "validation": {
+      "n": 200,
+      "raw_index_range_inclusive": [
+        804,
+        1003
+      ]
+    },
+    "test": {
+      "n": 1390,
+      "raw_index_range_inclusive": [
+        1004,
+        2393
+      ]
+    }
+  },
+  "metrics": {
+    "moment": {
+      "n": 1390,
+      "mse": 0.03283333086420607,
+      "rmse": 0.1811996988524155,
+      "mae": 0.14040683255087053,
+      "r2": 0.11814448024616153,
+      "rmse_paper_n_minus_1": 0.18126491379023058
+    },
+    "train_mean": {
+      "n": 1390,
+      "mse": 0.03793364920220573,
+      "rmse": 0.19476562633638855,
+      "mae": 0.1393832933243957,
+      "r2": -0.018842653269738552,
+      "rmse_paper_n_minus_1": 0.19483572373881516
+    },
+    "persistence_requires_measured_past_y": {
+      "n": 1390,
+      "mse": 0.0002462654900945011,
+      "rmse": 0.01569284837416398,
+      "mae": 0.010749976684316546,
+      "r2": 0.9933856670630553,
+      "rmse_paper_n_minus_1": 0.01569849633129274
+    }
+  }
+}

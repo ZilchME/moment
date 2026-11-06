@@ -1,7 +1,7 @@
 # 脱丁烷塔 MOMENT 软测量基准线
 
-状态：本次仅编写代码与检查文本，**尚未执行本适配的脚本、测试、训练或推理**。
-下列命令供后续在 Linux 主机执行；没有现成的训练结果或精度结论。
+状态：已用随机初始化的小模型和合成数据完成离线单轮训练、检查点重载推理及图表生成验证。
+**尚未执行正式预训练 MOMENT 的脱丁烷塔训练**，没有可报告的正式模型精度结论。
 
 ## 任务与协议
 
@@ -58,7 +58,7 @@ causal13 模式虽然每个时刻使用同样的 13 维特征，但 MOMENT 的�
 特征到 CPU 内存，然后只训练回归头；不会每轮重复编码这些样本。
 `--mode finetune` 更新主干和回归头，分别使用 `--backbone-lr` 与 `--lr`。
 `--gradient-checkpointing` 只在完整微调时生效。实现统一使用 float32，支持 CUDA / MPS / CPU；
-本适配尚未在这些设备上执行验证。
+当前仅通过 CPU 小模型离线流程验证，CUDA / MPS 尚未实测。
 
 基准线应标记完整配置，如 `MOMENT-Small + linear head + window statistics (process, context=32)`。
 若希望观察预训练表示本身的作用，应另外报告关闭统计量的结果，并与相同窗口统计量的
@@ -66,7 +66,7 @@ causal13 模式虽然每个时刻使用同样的 13 维特征，但 MOMENT 的�
 
 ## 后续 Linux 运行
 
-本适配只使用已声明的核心依赖，不新增第三方包，不需要 PTB-XL 或 Timeseries-PILE。
+本适配使用核心依赖（含绘图用 matplotlib），不需要 PTB-XL 或 Timeseries-PILE。
 在 `moment` 仓库根目录准备环境，然后将 CSV 放到主机可访问的位置：
 
 ```bash
@@ -74,6 +74,19 @@ uv sync --locked --extra cu128
 ```
 
 冻结主干基准线（首次训练时会下载公开预训练权重）：
+
+也可以使用启动脚本，默认采用 process / probe 与自动设备选择，并创建新的输出目录：
+
+```bash
+bash scripts/train_debutanizer.sh /path/to/debutanizer.csv
+
+# 先训练 1 轮验证流程；后续参数直接传给 Python 训练入口
+bash scripts/train_debutanizer.sh /path/to/debutanizer.csv --epochs 1 --batch-size 8
+```
+
+用 `--output` 指定输出目录，或用 `--features causal13` / `--mode finetune` 切换配置。
+运行 `bash scripts/train_debutanizer.sh --help` 查看启动说明。
+等价的 Python 入口命令：
 
 ```bash
 uv run --no-sync python scripts/debutanizer.py train \
@@ -108,12 +121,27 @@ Small/Base/Large 可通过 `--model` 切换；用 `--revision` 固定 Hub commit
 
 ## 输出与加载
 
+实验指标、预测 CSV 与 PNG 图表纳入版本控制，用于跨设备同步。
+`.pt` 检查点仅保留在本地，不提交到仓库；如需在另一台设备加载模型，需另行传输 `best.pt`。
+
 | 文件 | 内容 |
 | --- | --- |
 | `best.pt` | 最佳轮次的完整主干/回归头参数、模型配置、特征定义、训练配置、X/y scaler、数据 SHA-256 与版本 |
 | `history.json` | 每轮训练/验证标准化 MSE |
 | `metrics.json` | 时间划分、RMSE / MAE / MSE / R²、训练均值与上一时刻 y 基线 |
 | `predictions.csv` | 测试行索引、真实 y、预测 y、训练均值和 persistence |
+| `learning_curve.png` | 训练/验证标准化 MSE 曲线，标出最佳轮次 |
+| `inference_validation/metrics.json` | 训练后重新加载 `best.pt`，在同一测试区间进行推理的指标 |
+| `inference_validation/predictions.csv` | 重新加载检查点后的测试集预测 |
+| `inference_validation/consistency.json` | 与训练末尾测试预测的一致性检查（rtol=1e-5，atol=1e-6） |
+| `inference_validation/prediction_comparison.png` | 测试集真实值、预测值与训练均值对比 |
+| `inference_validation/prediction_scatter.png` | 真实值与预测值散点图，附理想预测参考线 |
+| `inference_validation/residuals.png` | 残差随时间变化与残差直方图 |
+
+`train`（包括 Shell 启动脚本）完成后会自动执行上述推理复核，不需要额外命令。
+复核从检查点重建模型并加载标准化参数，不重新训练；它复用原测试集，不代表新增独立数据验证。
+若两次预测不一致，保留复核结果并报错。单独执行 `evaluate` 也会保存三张测试集图表。
+绘图使用 Agg 后端，无需图形桌面；图中 y 与残差均为输入 CSV 的数值尺度。
 
 Persistence 使用真实 `y(t-1)`，process 模式的 MOMENT 不使用这个额外信息。
 R² 为 `1-SSE/SST`；常量目标时记为 null。另输出 `sqrt(SSE/(N-1))`，便于对照 SAE 报告。
@@ -144,8 +172,15 @@ process 模式允许所有 y 留空；causal13 仍要求对应历史 y 可用。
 
 ## 未来验证
 
-已新增 `tests/test_debutanizer.py`，覆盖特征因果性、时间区间、补齐、缺失 y、统计量、
-冻结/微调梯度和自包含检查点。根据本次要求，这些测试尚未运行。
+`tests/test_debutanizer_training.py` 已通过，覆盖单轮训练、重载检查点推理、
+测试区间与指标一致性，以及四张 PNG 图表的生成。无需下载权重，可执行：
+
+```bash
+uv run --no-sync python -m unittest discover -s tests -p test_debutanizer_training.py -v
+```
+
+另有 `tests/test_debutanizer.py`，覆盖特征因果性、时间区间、补齐、缺失 y、统计量、
+冻结/微调梯度和自包含检查点；本次没有运行该测试文件。
 后续授权运行时，先通过安装命令的 `--group dev` 选项安装 pytest，
 再执行 `uv run --no-sync python -m pytest tests/test_debutanizer.py`，
 再在 Linux 上做小规模训练验证。当前没有 RMSE、运行耗时或实际设备兼容性的新增实测结论。

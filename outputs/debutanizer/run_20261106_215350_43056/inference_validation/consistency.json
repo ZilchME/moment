@@ -1,0 +1,8 @@
+{
+  "checkpoint_reloaded": true,
+  "matches_training_evaluation": true,
+  "n_predictions": 1390,
+  "rtol": 1e-05,
+  "atol": 1e-06,
+  "max_absolute_prediction_difference": 0.0
+}
